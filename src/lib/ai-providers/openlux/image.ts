@@ -1,6 +1,6 @@
 import type { AiProviderImageExecutionContext, GenerateResult } from '@/lib/ai-providers/runtime-types'
 import type { GptImage2NormalizedOptions } from '@/lib/ai-providers/shared/gpt-image-2'
-import { readProviderJsonResponse } from '@/lib/ai-providers/failure'
+import { parseProviderEmbeddedJson, readProviderJsonResponse } from '@/lib/ai-providers/failure'
 import { requireSelectedModelId } from '@/lib/ai-providers/shared/model-selection'
 import { fetchWithProviderProxy } from '@/lib/http/outbound-proxy'
 import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
@@ -16,15 +16,13 @@ function projectImage(payload: unknown, outputFormat: string): GenerateResult {
     for (const choice of record.choices) {
       const content = choice?.message?.content
       if (typeof content !== 'string') continue
-      try {
-        return projectImage(JSON.parse(content), outputFormat)
-      } catch {
-        const inline = content.match(/data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)/u)
-        if (inline) data.push({ b64_json: inline[0] })
-        else {
-          const url = content.match(/https?:\/\/[^\s"'<>)]*/u)?.[0]
-          if (url) data.push({ url })
-        }
+      const embedded = parseProviderEmbeddedJson(content)
+      if (embedded !== null) return projectImage(embedded, outputFormat)
+      const inline = content.match(/data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)/u)
+      if (inline) data.push({ b64_json: inline[0] })
+      else {
+        const url = content.match(/https?:\/\/[^\s"'<>)]*/u)?.[0]
+        if (url) data.push({ url })
       }
     }
   }

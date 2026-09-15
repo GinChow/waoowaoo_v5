@@ -138,6 +138,27 @@ export async function readProviderJsonResponse<T = unknown>(input: {
   }
 }
 
+const PROVIDER_EMBEDDED_JSON_MAX_BYTES = 4 * 1024 * 1024
+
+/**
+ * The only parser for JSON that a Provider embeds as a string inside an
+ * already-bounded response (OpenAI-compatible gateways return image output
+ * inside choices[].message.content). Unparseable or oversized text yields
+ * null so callers keep treating it as plain content instead of a failure.
+ */
+export function parseProviderEmbeddedJson(
+  text: string,
+  maxBytes: number = PROVIDER_EMBEDDED_JSON_MAX_BYTES,
+): unknown | null {
+  const trimmed = text.trim()
+  if (!trimmed || Buffer.byteLength(trimmed, 'utf8') > maxBytes) return null
+  try {
+    return JSON.parse(trimmed) as unknown
+  } catch {
+    return null
+  }
+}
+
 export async function captureProviderHttpFailure(input: {
   readonly response: Response
   readonly provider: string

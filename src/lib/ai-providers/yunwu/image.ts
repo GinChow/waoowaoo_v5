@@ -5,6 +5,7 @@ import type { GptImage2ImageSize } from '@/lib/ai-providers/shared/gpt-image-2'
 import { requireSelectedModelId } from '@/lib/ai-providers/shared/model-selection'
 import {
   captureProviderHttpFailure,
+  parseProviderEmbeddedJson,
   readProviderJsonResponse,
 } from '@/lib/ai-providers/failure'
 import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
@@ -136,16 +137,14 @@ function extractDataUrlBase64(value: string): string | null {
 function collectImagesFromContent(content: string): ExtractedImage[] {
   const trimmed = content.trim()
   if (!trimmed) return []
-  try {
-    return collectImages(JSON.parse(trimmed) as unknown)
-  } catch {
-    const dataUrlBase64 = extractDataUrlBase64(trimmed)
-    if (dataUrlBase64) return [{ base64: dataUrlBase64 }]
-    const url = trimmed.match(/https?:\/\/[^\s"'<>)]*/u)?.[0]
-    if (url) return [{ url }]
-    const bareBase64 = normalizeBase64Payload(trimmed, 1_000)
-    return bareBase64 ? [{ base64: bareBase64 }] : []
-  }
+  const embedded = parseProviderEmbeddedJson(trimmed)
+  if (embedded !== null) return collectImages(embedded)
+  const dataUrlBase64 = extractDataUrlBase64(trimmed)
+  if (dataUrlBase64) return [{ base64: dataUrlBase64 }]
+  const url = trimmed.match(/https?:\/\/[^\s"'<>)]*/u)?.[0]
+  if (url) return [{ url }]
+  const bareBase64 = normalizeBase64Payload(trimmed, 1_000)
+  return bareBase64 ? [{ base64: bareBase64 }] : []
 }
 
 function collectImages(payload: unknown): ExtractedImage[] {
