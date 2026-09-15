@@ -41,10 +41,11 @@ function readSseData(block: string): unknown {
 }
 
 function providerFailure(
+  providerKey: string,
   source: unknown,
   phase: 'result' | 'stream',
 ): FailureRecord {
-  const failure = resolveAiProviderAdapter('openrouter').failure.normalize({
+  const failure = resolveAiProviderAdapter(providerKey).failure.normalize({
     error: source,
     phase,
   })
@@ -58,9 +59,9 @@ function streamFailureSource(payload: Record<string, unknown>): unknown {
   const response = isRecord(payload.response) ? payload.response : payload
   const error = isRecord(response.error) ? response.error : null
   const message = readString(error?.message)
-    ?? 'OpenRouter stream reported response.failed'
+    ?? 'Provider stream reported response.failed'
   return {
-    name: 'OpenRouterStreamFailure',
+    name: 'ProviderStreamFailure',
     message,
     code: readString(error?.code, 256),
     errorEnvelope: payload,
@@ -70,9 +71,9 @@ function streamFailureSource(payload: Record<string, unknown>): unknown {
 function nonStreamFailureSource(payload: Record<string, unknown>): unknown {
   const error = isRecord(payload.error) ? payload.error : null
   return {
-    name: 'OpenRouterResponseFailure',
+    name: 'ProviderResponseFailure',
     message: readString(error?.message)
-      ?? `OpenRouter returned terminal response status ${readString(payload.status, 256) ?? 'unknown'}`,
+      ?? `Provider returned terminal response status ${readString(payload.status, 256) ?? 'unknown'}`,
     code: readString(error?.code, 256) ?? readString(payload.status, 256),
     errorEnvelope: payload,
   }
@@ -80,8 +81,8 @@ function nonStreamFailureSource(payload: Record<string, unknown>): unknown {
 
 function streamDisconnectedSource(cause?: unknown): unknown {
   return {
-    name: 'OpenRouterStreamDisconnected',
-    message: 'OpenRouter stream ended without response.completed or response.failed',
+    name: 'ProviderStreamDisconnected',
+    message: 'Provider stream ended without response.completed or response.failed',
     code: 'response_stream_disconnected',
     ...(cause === undefined ? {} : { cause }),
   }
@@ -116,12 +117,12 @@ export async function observeCodexProviderSuccessResponse(input: {
     try {
       payload = await readProviderJsonResponse({
         response: input.response,
-        provider: 'openrouter',
+        provider: input.attempt.providerKey,
         phase: 'result',
       })
     } catch (error: unknown) {
       await failCodexProviderAttempt(input.attempt, {
-        failure: providerFailure(error, 'result'),
+        failure: providerFailure(input.attempt.providerKey, error, 'result'),
         providerStatus: input.response.status,
         providerRequestId: input.providerRequestId,
         providerGenerationId: input.headerGenerationId,
@@ -149,7 +150,7 @@ export async function observeCodexProviderSuccessResponse(input: {
       payload,
     })
     await failCodexProviderAttempt(input.attempt, {
-      failure: providerFailure(source, 'result'),
+      failure: providerFailure(input.attempt.providerKey, source, 'result'),
       providerStatus: input.response.status,
       providerRequestId: input.providerRequestId,
       providerGenerationId: generationId,
@@ -163,7 +164,7 @@ export async function observeCodexProviderSuccessResponse(input: {
   if (!input.response.body) {
     const source = streamDisconnectedSource()
     await failCodexProviderAttempt(input.attempt, {
-      failure: providerFailure(source, 'stream'),
+      failure: providerFailure(input.attempt.providerKey, source, 'stream'),
       providerStatus: input.response.status,
       providerRequestId: input.providerRequestId,
       providerGenerationId: input.headerGenerationId,
@@ -205,7 +206,7 @@ export async function observeCodexProviderSuccessResponse(input: {
       const source = streamFailureSource(payload)
       settlementStarted = true
       await failCodexProviderAttempt(input.attempt, {
-        failure: providerFailure(source, 'stream'),
+        failure: providerFailure(input.attempt.providerKey, source, 'stream'),
         providerStatus: input.response.status,
         providerRequestId: input.providerRequestId,
         providerGenerationId: responseIdentity(payload, input.headerGenerationId),
@@ -274,7 +275,7 @@ export async function observeCodexProviderSuccessResponse(input: {
             const source = streamDisconnectedSource()
             settlementStarted = true
             await failCodexProviderAttempt(input.attempt, {
-              failure: providerFailure(source, 'stream'),
+              failure: providerFailure(input.attempt.providerKey, source, 'stream'),
               providerStatus: input.response.status,
               providerRequestId: input.providerRequestId,
               providerGenerationId: input.headerGenerationId,
@@ -294,13 +295,13 @@ export async function observeCodexProviderSuccessResponse(input: {
         }
         if (buffer.length > MAX_SSE_EVENT_CHARS) {
           const source = {
-            name: 'OpenRouterStreamEventTooLarge',
-            message: `OpenRouter SSE event exceeded ${String(MAX_SSE_EVENT_CHARS)} characters`,
+            name: 'ProviderStreamEventTooLarge',
+            message: `Provider SSE event exceeded ${String(MAX_SSE_EVENT_CHARS)} characters`,
             code: 'response_stream_event_too_large',
           }
           settlementStarted = true
           await failCodexProviderAttempt(input.attempt, {
-            failure: providerFailure(source, 'stream'),
+            failure: providerFailure(input.attempt.providerKey, source, 'stream'),
             providerStatus: input.response.status,
             providerRequestId: input.providerRequestId,
             providerGenerationId: input.headerGenerationId,
@@ -328,7 +329,7 @@ export async function observeCodexProviderSuccessResponse(input: {
           } else {
             const source = streamDisconnectedSource(error)
             await failCodexProviderAttempt(input.attempt, {
-              failure: providerFailure(source, 'stream'),
+              failure: providerFailure(input.attempt.providerKey, source, 'stream'),
               providerStatus: input.response.status,
               providerRequestId: input.providerRequestId,
               providerGenerationId: input.headerGenerationId,

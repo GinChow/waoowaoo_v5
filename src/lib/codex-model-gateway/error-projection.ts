@@ -33,6 +33,7 @@ export type CodexProviderResponseProjection = {
 }
 
 type ProviderErrorMetadata = {
+  readonly providerKey: string
   readonly code: string | null
   readonly type: string | null
   readonly errorType: string | null
@@ -89,18 +90,22 @@ function readNestedProviderError(value: unknown): Record<string, unknown> | null
   }
 }
 
-async function readProviderErrorMetadata(response: Response): Promise<ProviderErrorMetadata> {
+async function readProviderErrorMetadata(
+  response: Response,
+  providerKey: string,
+): Promise<ProviderErrorMetadata> {
   let parsed: unknown
   try {
     parsed = await readProviderJsonResponse({
       response,
-      provider: 'openrouter',
+      provider: providerKey,
       phase: 'submit',
       maxBytes: CODEX_PROVIDER_ERROR_MAX_BYTES,
     })
   } catch (error: unknown) {
     if (!(error instanceof ProviderHttpError)) throw error
     return {
+      providerKey,
       code: null,
       type: null,
       errorType: null,
@@ -132,7 +137,7 @@ async function readProviderErrorMetadata(response: Response): Promise<ProviderEr
     ?? boundedProviderErrorMessage(error?.message)
     ?? boundedProviderErrorMessage(root?.message)
   const source = new ProviderHttpError({
-    provider: 'openrouter',
+    provider: providerKey,
     phase: 'submit',
     statusCode: response.status,
     requestId: response.headers.get('x-request-id')?.trim()
@@ -144,7 +149,7 @@ async function readProviderErrorMetadata(response: Response): Promise<ProviderEr
     errorEnvelope: parsed,
     diagnosticText: message,
   })
-  return { code, type, errorType, providerCode, message, source }
+  return { providerKey, code, type, errorType, providerCode, message, source }
 }
 
 function unifiedCodeForFailure(
@@ -174,7 +179,7 @@ function capturedFailure(input: {
   readonly kind: CodexProviderFailureKind
   readonly providerStatus: number
 }): FailureRecord {
-  const normalized = resolveAiProviderAdapter('openrouter').failure.normalize({
+  const normalized = resolveAiProviderAdapter(input.metadata.providerKey).failure.normalize({
     error: input.metadata.source,
     phase: 'submit',
     operation: EXTERNAL_OPERATION.PROVIDER_SUBMIT,
@@ -317,6 +322,7 @@ const PROVIDER_OVERLOAD_ERROR_TOKENS = new Set([
  */
 export async function projectCodexProviderResponse(
   response: Response,
+  providerKey: string,
 ): Promise<CodexProviderResponseProjection> {
   const providerStatus = response.status
   if (response.ok) {
@@ -330,7 +336,7 @@ export async function projectCodexProviderResponse(
     }
   }
 
-  const metadata = await readProviderErrorMetadata(response)
+  const metadata = await readProviderErrorMetadata(response, providerKey)
   const providerCode = metadata.providerCode ?? metadata.code ?? metadata.type
   const providerErrorType = metadata.errorType
   if (

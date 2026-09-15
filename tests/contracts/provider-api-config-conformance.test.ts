@@ -6,6 +6,7 @@ import {
   listApiConfigCatalogModels,
 } from '@/lib/ai-registry/api-config-catalog'
 import { AI_PROVIDER_MANIFESTS } from '@/lib/ai-providers/manifests'
+import { listBuiltinCapabilityCatalog } from '@/lib/ai-registry/capabilities-catalog'
 import { ApiError } from '@/lib/api-errors'
 import { normalizeProvidersInput } from '@/lib/user-api/api-config-provider-normalization'
 import { normalizeProviderRuntimeBaseUrl } from '@/lib/ai-registry/runtime-selection'
@@ -52,6 +53,23 @@ describe('API config provider registry conformance', () => {
       expect(tryResolveAiProviderAdapter(provider.id)).not.toBeNull()
       expect(normalizeProviderRuntimeBaseUrl(provider.id)).toBe(provider.baseUrl)
       expect(() => normalizeProvidersInput([provider])).not.toThrow()
+    }
+  })
+
+  // The llm slot is the Codex assistant slot: the gateway proxies the OpenAI
+  // Responses wire byte-for-byte, so only a registry entry with a verified
+  // Responses wire may be offered. Every builtin llm capability without that
+  // declaration must stay out of the selectable catalog.
+  it('offers only Responses-capable llm models in the assistant slot', () => {
+    const offered = new Set(listApiConfigCatalogModels()
+      .filter((model) => model.type === 'llm')
+      .map((model) => `${model.provider}::${model.modelId}`))
+    expect(offered.size).toBeGreaterThan(0)
+    for (const entry of listBuiltinCapabilityCatalog().filter((candidate) => candidate.modelType === 'llm')) {
+      const key = `${entry.provider}::${entry.modelId}`
+      expect(offered.has(key), key).toBe(entry.capabilities?.llm?.codexRuntimeWireApi === 'responses'
+        && AI_PROVIDER_MANIFESTS.some((manifest) => manifest.providerKey === entry.provider
+          && manifest.catalogs.apiConfigModels.some((model) => model.type === 'llm' && model.modelId === entry.modelId)))
     }
   })
 

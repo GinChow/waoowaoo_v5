@@ -98,12 +98,8 @@ async function resolveSelectedAssistantModel(scope: CodexModelGatewayScope) {
   } catch {
     throw new CodexModelGatewayError('ASSISTANT_MODEL_UNSUPPORTED', 422)
   }
-  if (selection.provider !== 'openrouter') {
-    throw new CodexModelGatewayError(
-      'PROVIDER_RESPONSES_UNSUPPORTED',
-      422,
-    )
-  }
+  // The registry is the only admission judge: a model serves Codex iff its
+  // capability entry declares a verified Responses wire, whatever the provider.
   ensureAiCatalogsRegistered()
   const codexRuntimeWireApi = findBuiltinCapabilities(
     'llm',
@@ -143,6 +139,7 @@ async function resolveSelectedAssistantModel(scope: CodexModelGatewayScope) {
 export async function resolveCodexModelGatewayUpstream(
   scopeValue: CodexModelGatewayScope,
 ): Promise<{
+  readonly provider: string
   readonly runtimeModelId: string
   readonly modelId: string
   readonly modelKey: string
@@ -152,6 +149,7 @@ export async function resolveCodexModelGatewayUpstream(
   const scope = normalizeCodexModelGatewayScope(scopeValue)
   const resolved = await resolveSelectedAssistantModel(scope)
   return {
+    provider: resolved.selection.provider,
     runtimeModelId: resolveCodexRuntimeModelId(resolved.selection.modelId),
     modelId: resolved.selection.modelId,
     modelKey: resolved.selection.modelKey,

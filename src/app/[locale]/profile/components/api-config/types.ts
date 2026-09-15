@@ -115,6 +115,8 @@ const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
     google: 'Google',
     fal: 'FAL',
     openrouter: 'OpenRouter',
+    yunwu: '云雾 Yunwu',
+    openlux: 'OpenLux',
 }
 
 function isZhLocale(locale?: string): boolean {
@@ -149,6 +151,10 @@ export interface ProviderTutorial {
 // 注意: text 字段使用 i18n key, 翻译在 apiConfig.tutorials 下
 export const PROVIDER_TUTORIALS: ProviderTutorial[] = [
     {
+        providerId: 'openlux',
+        steps: [{ text: 'openlux_step1', url: 'https://api.openlux.ai/' }]
+    },
+    {
         providerId: 'ark',
         steps: [
             {
@@ -167,6 +173,15 @@ export const PROVIDER_TUTORIALS: ProviderTutorial[] = [
             {
                 text: 'openrouter_step1',
                 url: 'https://openrouter.ai/settings/keys'
+            }
+        ]
+    },
+    {
+        providerId: 'yunwu',
+        steps: [
+            {
+                text: 'yunwu_step1',
+                url: 'https://yunwu.ai/'
             }
         ]
     },

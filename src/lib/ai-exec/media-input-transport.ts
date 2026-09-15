@@ -1,6 +1,6 @@
 import { getDeploymentConfig, type ProviderMediaInputTransport } from '@/lib/deployment/config'
 import type { AiProviderRoute, AiProviderRouteSet } from '@/lib/ai-registry/provider-route-set'
-import { parseModelKeyStrict } from '@/lib/ai-registry/selection'
+import { getProviderKey, parseModelKeyStrict } from '@/lib/ai-registry/selection'
 import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/ai-registry/capabilities-catalog'
 import type {
   AiResolvedSelection,
@@ -87,7 +87,8 @@ function supportsTransport(input: {
   mediaKind: ProviderMediaInputKind
   transport: ProviderMediaInputTransport
 }): boolean {
-  const contract = CONTRACT_BY_PROVIDER_MODALITY.get(`${input.provider}:${input.modality}`)
+  const providerKey = getProviderKey(input.provider)
+  const contract = CONTRACT_BY_PROVIDER_MODALITY.get(`${providerKey}:${input.modality}`)
   return contract?.transports[input.mediaKind]?.includes(input.transport) === true
 }
 
@@ -192,7 +193,18 @@ export function projectEffectiveMediaCapabilities(
   if (!capabilities || (modelType !== 'image' && modelType !== 'video')) return capabilities
   const parsed = parseModelKeyStrict(modelKey)
   if (!parsed) return capabilities
-  if (modelType === 'image') return capabilities
+  if (modelType === 'image') {
+    const image = capabilities.image
+    if (!image || image.maxReferenceImages === undefined) return capabilities
+    const imageAvailable = supportsEffectiveInput(parsed.provider, 'image', 'image')
+    return {
+      ...capabilities,
+      image: {
+        ...image,
+        maxReferenceImages: imageAvailable ? image.maxReferenceImages : 0,
+      },
+    }
+  }
 
   const video = capabilities.video
   if (!video) return capabilities

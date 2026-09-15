@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { listRegisteredAiProviderAdapters } from '@/lib/ai-providers'
-import { listProviderMediaInputContracts } from '@/lib/ai-exec/media-input-transport'
+import {
+  listProviderMediaInputContracts,
+  resolveEffectiveCapabilitiesByModelKey,
+} from '@/lib/ai-exec/media-input-transport'
+import { ensureAiCatalogsRegistered } from '@/lib/ai-exec/catalog-bootstrap'
+import { listBuiltinCapabilityCatalog } from '@/lib/ai-registry/capabilities-catalog'
+import { composeModelKey } from '@/lib/ai-registry/selection'
 
 describe('Provider media input transport registry conformance', () => {
   it('exhaustively binds every media adapter modality to one transport contract', () => {
@@ -25,5 +31,30 @@ describe('Provider media input transport registry conformance', () => {
         expect(new Set(transports).size).toBe(transports?.length)
       }
     }
+  })
+
+  it('projects the same effective media capabilities for every provider instance', () => {
+    ensureAiCatalogsRegistered()
+    let referenceCapableModels = 0
+    for (const entry of listBuiltinCapabilityCatalog()) {
+      if (entry.modelType !== 'image' && entry.modelType !== 'video') continue
+      const hasReferences = entry.modelType === 'image'
+        ? (entry.capabilities?.image?.maxReferenceImages ?? 0) > 0
+        : (entry.capabilities?.video?.maxReferenceImages ?? 0) > 0
+          || (entry.capabilities?.video?.maxReferenceAudios ?? 0) > 0
+          || (entry.capabilities?.video?.maxReferenceVideos ?? 0) > 0
+      if (!hasReferences) continue
+      referenceCapableModels += 1
+      const canonical = resolveEffectiveCapabilitiesByModelKey(
+        entry.modelType,
+        composeModelKey(entry.provider, entry.modelId),
+      )
+      const providerInstance = resolveEffectiveCapabilitiesByModelKey(
+        entry.modelType,
+        composeModelKey(`${entry.provider}:secondary`, entry.modelId),
+      )
+      expect(providerInstance).toEqual(canonical)
+    }
+    expect(referenceCapableModels).toBeGreaterThan(0)
   })
 })

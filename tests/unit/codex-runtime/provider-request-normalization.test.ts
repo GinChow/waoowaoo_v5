@@ -129,7 +129,7 @@ describe('Codex provider request normalization', () => {
   }) => {
     const projected = await projectCodexProviderResponse(Response.json({
       error: { ...providerError, message: 'provider-private-message' },
-    }, { status: providerStatus }))
+    }, { status: providerStatus }), 'openrouter')
 
     expect(projected.failureKind).toBe(expectedKind)
     expect(projected.providerStatus).toBe(providerStatus)
@@ -154,7 +154,7 @@ describe('Codex provider request normalization', () => {
         message: 'Item ctc_123 was provided without its required output.',
       },
       error_type: 'invalid_request',
-    }, { status: 400 }))
+    }, { status: 400 }), 'openrouter')
 
     expect(projected.failureKind).toBe('request_rejected')
     expect(projected.providerStatus).toBe(400)
@@ -187,7 +187,7 @@ describe('Codex provider request normalization', () => {
           }),
         },
       },
-    }, { status: 400 }))
+    }, { status: 400 }), 'openrouter')
 
     expect(projected.failureKind).toBe('request_rejected')
     expect(projected.providerCode).toBe('invalid_encrypted_content')
@@ -208,7 +208,7 @@ describe('Codex provider request normalization', () => {
     }, {
       status: 429,
       headers: { 'Retry-After': '12' },
-    }))
+    }), 'openrouter')
 
     expect(projected.failureKind).toBe('rate_limited')
     expect(projected.response.status).toBe(429)
@@ -224,7 +224,7 @@ describe('Codex provider request normalization', () => {
     }, {
       status: 418,
       headers: { 'x-request-id': 'future-request-418' },
-    }))
+    }), 'openrouter')
 
     expect(projected.failureKind).toBe('request_rejected')
     expect(projected.failure).toMatchObject({
@@ -243,7 +243,7 @@ describe('Codex provider request normalization', () => {
     const textFailure = await projectCodexProviderResponse(new Response(
       'upstream proxy rejected this request',
       { status: 502, headers: { 'content-type': 'text/plain' } },
-    ))
+    ), 'openrouter')
     expect(textFailure.failure?.native).toMatchObject({
       message: 'upstream proxy rejected this request',
       statusCode: 502,
@@ -252,7 +252,7 @@ describe('Codex provider request normalization', () => {
     const oversized = await projectCodexProviderResponse(new Response(
       'x'.repeat(70 * 1024),
       { status: 502, headers: { 'content-type': 'text/plain' } },
-    ))
+    ), 'openrouter')
     expect(oversized.failure?.native.message).toContain('could not be read within 65536 bytes')
     expect(oversized.failure?.native.statusCode).toBe(502)
     expect(oversized.failure?.native.cause).not.toBeNull()

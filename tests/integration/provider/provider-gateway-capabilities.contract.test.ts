@@ -110,15 +110,23 @@ describe('provider contract - gateway dispatch (connection tests, session, capab
   })
 
   it('registers one explicit transport protocol for every configured LLM model', () => {
-    const expectedProtocol = {
-      ark: 'openai-responses',
-      google: 'google-generative-ai',
-      openrouter: 'openrouter-chat',
-    } as const
+    // OpenLux serves Gemini natively and OpenAI-series models through /v1/responses.
+    const expectedProtocol = (provider: string, modelId: string) => {
+      switch (provider) {
+        case 'ark': return 'openai-responses'
+        case 'google': return 'google-generative-ai'
+        case 'openlux': return modelId.startsWith('gpt-') ? 'openai-responses' : 'google-generative-ai'
+        case 'openrouter': return 'openrouter-chat'
+        default: return null
+      }
+    }
     const llmModels = listApiConfigCatalogModels().filter((model) => model.type === 'llm')
     expect(llmModels.length).toBeGreaterThan(0)
+    const openLuxGpt = llmModels.filter((model) => model.provider === 'openlux' && model.modelId.startsWith('gpt-'))
+    expect(openLuxGpt.map((model) => model.modelId).sort())
+      .toEqual(['gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-6-astra'])
     for (const model of llmModels) {
-      const expected = expectedProtocol[model.provider as keyof typeof expectedProtocol]
+      const expected = expectedProtocol(model.provider, model.modelId)
       expect(expected).toBeTruthy()
       expect(resolveRegisteredLlmProtocol(`${model.provider}::${model.modelId}`)).toBe(expected)
     }

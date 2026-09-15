@@ -20,6 +20,7 @@ export type FakeRequestRecord = {
   path: string
   query: string
   bodyText: string
+  bodyBuffer: Buffer
   headers: Record<string, string | string[] | undefined>
 }
 
@@ -100,6 +101,7 @@ export async function startScenarioServer() {
       path: url.pathname,
       query: url.search,
       bodyText,
+      bodyBuffer: Buffer.concat(chunks),
       headers: normalizeHeaders(req.headers),
     })
     requests.set(key, history)

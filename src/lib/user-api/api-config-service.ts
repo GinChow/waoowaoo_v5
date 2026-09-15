@@ -39,6 +39,7 @@ import {
   sanitizeDefaultModelsForBilling,
   sanitizeModelsForBilling,
   validateDefaultModelsAgainstModels,
+  validateAssistantModelSupport,
   validateDefaultModelPricing,
 } from './api-config-defaults'
 import {
@@ -238,6 +239,7 @@ export async function putUserApiConfig(
 
   if (normalizedDefaults !== undefined) {
     validateDefaultModelsAgainstModels(normalizedDefaults, effectiveModelSource)
+    validateAssistantModelSupport(normalizedDefaults)
     if (billingMode !== 'OFF') {
       validateDefaultModelPricing(normalizedDefaults)
     }

@@ -1,5 +1,8 @@
 import { ApiError } from '@/lib/api-errors'
 import { parseModelKeyStrict } from '@/lib/ai-registry/selection'
+import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/ai-registry/capabilities-catalog'
+import { isProductionModelSupported } from '@/lib/ai-registry/media-model-selection'
+import { ensureAiCatalogsRegistered } from '@/lib/ai-exec/catalog-bootstrap'
 import type { PricingApiType } from '@/lib/ai-registry/pricing-catalog'
 import {
   DEFAULT_ANALYSIS_WORKFLOW_CONCURRENCY,
@@ -118,6 +121,23 @@ export function normalizeWorkflowConcurrencyInput(rawWorkflowConcurrency: unknow
   }
 
   return normalized
+}
+
+/**
+ * A stored legacy llm model can outlive its catalog admission; the assistant
+ * slot still refuses it here so the first Turn cannot be the place it fails.
+ */
+export function validateAssistantModelSupport(defaultModels: DefaultModelsPayload) {
+  const modelKey = defaultModels.assistantModel
+  if (!modelKey) return
+  ensureAiCatalogsRegistered()
+  if (isProductionModelSupported('llm', resolveBuiltinCapabilitiesByModelKey('llm', modelKey))) return
+  throw new ApiError('INVALID_PARAMS', {
+    code: 'ASSISTANT_MODEL_UNSUPPORTED',
+    field: 'defaultModels.assistantModel',
+    modelKey,
+    reason: 'responses_wire_required',
+  })
 }
 
 export function validateDefaultModelPricing(defaultModels: DefaultModelsPayload) {

@@ -1,10 +1,19 @@
 import type { ModelCapabilities, UnifiedModelType } from './types'
 
-/** Music production executes the user's composition plan without compiling a prompt. */
+/**
+ * Music production executes the user's composition plan without compiling a
+ * prompt. The llm slot is the Codex assistant slot, and the model gateway
+ * proxies the OpenAI Responses wire byte-for-byte, so only a registry entry
+ * with a verified Responses wire can serve it.
+ */
 export function isProductionModelSupported(type: UnifiedModelType, capabilities: ModelCapabilities | undefined): boolean {
-  return type !== 'music' || Boolean(
-    capabilities?.music?.generationModes?.includes('composition_plan') && capabilities.music.compositionPlan,
-  )
+  if (type === 'music') {
+    return Boolean(
+      capabilities?.music?.generationModes?.includes('composition_plan') && capabilities.music.compositionPlan,
+    )
+  }
+  if (type === 'llm') return capabilities?.llm?.codexRuntimeWireApi === 'responses'
+  return true
 }
 
 export const MEDIA_MODEL_TYPES = ['image', 'video', 'music', 'voice'] as const

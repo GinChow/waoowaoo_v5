@@ -12,7 +12,7 @@ import { requireCodexModelGatewayModelActiveTurn } from './active-turn-guard'
 import { projectCodexProviderResponse } from './error-projection'
 import { editionBilling } from '@/lib/edition/current/billing'
 import { InsufficientBalanceError } from '@/lib/billing/errors'
-import { attachOpenRouterRealtimeBilling } from './openrouter-realtime-billing'
+import { attachCodexRealtimeBilling } from './realtime-billing'
 import { resolveAiProviderAdapter } from '@/lib/ai-providers'
 import { getDeploymentConfig } from '@/lib/deployment/config'
 import { AppError } from '@/lib/errors/app-error'
@@ -379,7 +379,7 @@ export async function proxyCodexResponsesRequest(params: {
     userId: scope.userId,
     turnId: activeTurn.turnId,
     runtimeAttempt: activeTurn.attempt,
-    providerKey: 'openrouter',
+    providerKey: upstream.provider,
     modelKey: upstream.modelKey,
     requestHash: createHash('sha256')
       .update(body)
@@ -421,7 +421,7 @@ export async function proxyCodexResponsesRequest(params: {
       params.request.signal.throwIfAborted()
     }
     const sourceFailure = projectProviderCredentialOwnership(
-      resolveAiProviderAdapter('openrouter').failure.normalize({
+      resolveAiProviderAdapter(upstream.provider).failure.normalize({
         error,
         phase: 'submit',
         operation: EXTERNAL_OPERATION.PROVIDER_SUBMIT,
@@ -467,10 +467,10 @@ export async function proxyCodexResponsesRequest(params: {
   })
   let projection: Awaited<ReturnType<typeof projectCodexProviderResponse>>
   try {
-    projection = await projectCodexProviderResponse(response)
+    projection = await projectCodexProviderResponse(response, upstream.provider)
   } catch (error: unknown) {
     const sourceFailure = projectProviderCredentialOwnership(
-      resolveAiProviderAdapter('openrouter').failure.normalize({
+      resolveAiProviderAdapter(upstream.provider).failure.normalize({
         error,
         phase: 'result',
         operation: EXTERNAL_OPERATION.PROVIDER_SUBMIT,
@@ -527,12 +527,13 @@ export async function proxyCodexResponsesRequest(params: {
     modelKey: upstream.modelKey,
     responseStartedAt: providerRequestStartedAt,
   })
-  return attachOpenRouterRealtimeBilling({
+  return attachCodexRealtimeBilling({
     response: observedResponse,
     headerGenerationId,
     userId: scope.userId,
     projectId: scope.projectId,
     turnId: activeTurn.turnId,
+    providerKey: upstream.provider,
     modelKey: upstream.modelKey,
   })
 }

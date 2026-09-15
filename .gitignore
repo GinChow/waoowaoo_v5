@@ -115,3 +115,6 @@ docs/**
 
 # Locally downloaded dev binaries (Stripe CLI)
 .tools/
+test_api/
+test_api
+CLAUDE.md

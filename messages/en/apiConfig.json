@@ -130,6 +130,8 @@
       "ark_step1": "Go to the Volcano Engine console to create an API Key",
       "ark_step2": "On the model management page, click 'Enable All Models' button in the top right corner",
       "openrouter_step1": "Go to OpenRouter platform and create an API Key (must select models with image capabilities)",
+      "yunwu_step1": "Go to Yunwu and create an API key under API Tokens",
+      "openlux_step1": "Create an API Key on OpenLux and use https://api.openlux.ai/v1 as the base URL",
       "fal_step1": "Go to FAL platform and create an API Key",
       "google_step1": "Go to Google AI Studio and create an API Key"
     }

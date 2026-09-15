@@ -21,7 +21,7 @@ export const llmUsageFactSchema = z
 export type LlmUsageFact = z.infer<typeof llmUsageFactSchema>
 
 export function buildLlmUsageFactId(
-  scope: 'openrouter-generation' | 'web-search',
+  scope: 'openrouter-generation' | 'gateway-generation' | 'web-search',
   identityParts: readonly (string | number)[],
 ): string {
   const canonicalIdentity = identityParts
