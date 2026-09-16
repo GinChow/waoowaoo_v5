@@ -1,6 +1,7 @@
 import { buildGptImage2OptionSchema } from '@/lib/ai-providers/shared/gpt-image-2'
 import { enumValidator } from '@/lib/ai-providers/shared/option-schema'
 import { OPENROUTER_GPT_5_6_REASONING_EFFORT_OPTIONS } from '@/lib/ai-providers/openrouter/models'
+import { OPENLUX_VIDEO_MODELS, openLuxVideoCapabilities } from './video-models'
 
 export const OPENLUX_IMAGE_MODELS = [
   ['gpt-image-2.5-flare', 'GPT Image 2.5 Flare'],
@@ -73,6 +74,7 @@ export const OPENLUX_API_CONFIG_MODELS = [
   ...OPENLUX_LLM_MODELS.map(([modelId, name]) => ({ provider: 'openlux', modelId, name, type: 'llm' as const })),
   ...OPENLUX_GPT_MODELS.map(([modelId, name]) => ({ provider: 'openlux', modelId, name, type: 'llm' as const })),
   ...OPENLUX_IMAGE_MODELS.map(([modelId, name]) => ({ provider: 'openlux', modelId, name, type: 'image' as const })),
+  ...OPENLUX_VIDEO_MODELS.map(([modelId, name]) => ({ provider: 'openlux', modelId, name, type: 'video' as const })),
 ]
 
 export const OPENLUX_CAPABILITIES = [
@@ -86,5 +88,8 @@ export const OPENLUX_CAPABILITIES = [
   })),
   ...OPENLUX_IMAGE_MODELS.map(([modelId]) => ({ provider: 'openlux', modelId, modelType: 'image' as const,
     capabilities: { image: { resolutionOptions: OPENLUX_RESOLUTIONS, qualityOptions: openLuxImageQualities(modelId), maxReferenceImages: 16 } },
+  })),
+  ...OPENLUX_VIDEO_MODELS.map(([modelId]) => ({ provider: 'openlux', modelId, modelType: 'video' as const,
+    capabilities: { video: openLuxVideoCapabilities(modelId) },
   })),
 ]

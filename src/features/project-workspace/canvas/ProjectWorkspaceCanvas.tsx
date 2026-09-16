@@ -734,8 +734,13 @@ function ProjectWorkspaceFolderCanvas({
   }, [notifyCanvasUserInteraction])
   const applyWheelZoom = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (isWorkspaceCanvasWheelLockedTarget(event.target)) return
-    const bounds = canvasRef.current?.getBoundingClientRect()
-    if (!bounds) return
+    // React routes synthetic events along the component tree, so a wheel inside
+    // an overlay portaled out of the canvas subtree (reference picker modal,
+    // image preview) still reaches this capture handler; only wheels over the
+    // canvas' own DOM surface may zoom it.
+    const surface = canvasRef.current
+    if (!surface || !(event.target instanceof Node) || !surface.contains(event.target)) return
+    const bounds = surface.getBoundingClientRect()
     event.preventDefault()
     const viewport = reactFlow.getViewport()
     const nextZoom = getNextWorkspaceCanvasWheelZoom(viewport.zoom, event.deltaY)
@@ -1132,6 +1137,16 @@ function ProjectWorkspaceFolderCanvas({
                 dropHighlighted: referenceDrop.activeTarget === 'details',
                 referenceDrop: detailsReferenceDrop,
                 onReferenceDropConsumed: consumeDetailsReferenceDrop,
+                folderPath: currentFolderPath,
+                onUploadedReference: (resourceId, reused) => {
+                  // Same placement rule as "run again": section members are
+                  // packed by their frame, only free cards get a neighbour pinned.
+                  if (reused || selectedNode.parentId) return
+                  pinResourcePositions([resourceId], {
+                    x: selectedNode.position.x + selectedNode.data.width + REGENERATED_CARD_GAP_X,
+                    y: selectedNode.position.y,
+                  })
+                },
                 generationCapabilities,
               }}
             />

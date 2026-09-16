@@ -117,6 +117,7 @@ const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
     openrouter: 'OpenRouter',
     yunwu: '云雾 Yunwu',
     openlux: 'OpenLux',
+    metaso: '秘塔 Metaso',
 }
 
 function isZhLocale(locale?: string): boolean {
@@ -153,6 +154,10 @@ export const PROVIDER_TUTORIALS: ProviderTutorial[] = [
     {
         providerId: 'openlux',
         steps: [{ text: 'openlux_step1', url: 'https://api.openlux.ai/' }]
+    },
+    {
+        providerId: 'metaso',
+        steps: [{ text: 'metaso_step1', url: 'https://metaso.cn/' }]
     },
     {
         providerId: 'ark',

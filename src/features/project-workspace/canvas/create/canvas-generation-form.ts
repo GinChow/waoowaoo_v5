@@ -6,6 +6,12 @@ import { canvasReferenceIssue, type CanvasGenerationCapability } from './canvas-
 export interface CanvasGenerationFormInput {
   readonly configurationVersion: string | null
   readonly aspectRatio: string | null
+  /**
+   * The frame is owned by the asset format policy (character/location/prop):
+   * the Operation schema forbids `options.aspectRatio` and the server resolves
+   * the fixed format, so the form neither offers nor requires a choice.
+   */
+  readonly aspectRatioLocked?: boolean
   readonly durationSeconds: number | null
   readonly parameters: Readonly<Record<string, CapabilityValue>>
   readonly references: readonly GenerationReferenceRole[]
@@ -29,7 +35,7 @@ export function canvasGenerationFormIssues(capability: CanvasGenerationCapabilit
   if (capability.view.unavailableReason) return ['MODEL_CONFIGURATION_UNAVAILABLE']
   const issues: string[] = []
   if (input.configurationVersion !== capability.view.configurationVersion) issues.push('CONFIGURATION_CHANGED')
-  if (!input.aspectRatio || !capability.view.aspectRatios.includes(input.aspectRatio)) issues.push('ASPECT_RATIO_REQUIRED')
+  if (!input.aspectRatioLocked && (!input.aspectRatio || !capability.view.aspectRatios.includes(input.aspectRatio))) issues.push('ASPECT_RATIO_REQUIRED')
   if (capability.mediaType === 'video' && (input.durationSeconds === null || !capability.view.durationsSeconds.includes(input.durationSeconds))) issues.push('DURATION_REQUIRED')
   if (capability.view.parameters.some((parameter) => {
     const value = input.parameters[parameter.field]

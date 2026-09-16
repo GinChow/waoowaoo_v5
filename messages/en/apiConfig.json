@@ -132,6 +132,7 @@
       "openrouter_step1": "Go to OpenRouter platform and create an API Key (must select models with image capabilities)",
       "yunwu_step1": "Go to Yunwu and create an API key under API Tokens",
       "openlux_step1": "Create an API Key on OpenLux and use https://api.openlux.ai/v1 as the base URL",
+      "metaso_step1": "Create an API Key on Metaso and use https://metaso.cn/api/minimax as the base URL",
       "fal_step1": "Go to FAL platform and create an API Key",
       "google_step1": "Go to Google AI Studio and create an API Key"
     }

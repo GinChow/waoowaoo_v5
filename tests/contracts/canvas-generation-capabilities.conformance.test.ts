@@ -93,6 +93,12 @@ describe('Canvas generation capability registry conformance', () => {
         expect(canvasGenerationFormIssues(capability, { ...valid, parameters: missing })).toContain('PARAMETERS_REQUIRED')
       }
       expect(canvasGenerationFormIssues(capability, { ...valid, configurationVersion: 'previous' })).toContain('CONFIGURATION_CHANGED')
+      expect(canvasGenerationFormIssues(capability, { ...valid, aspectRatio: null })).toContain('ASPECT_RATIO_REQUIRED')
+      if (capability.mediaType === 'image') {
+        // Asset images (character/location/prop) carry no aspectRatio: the
+        // Operation schema forbids it and the server resolves the fixed format.
+        expect(canvasGenerationFormIssues(capability, { ...valid, aspectRatio: null, aspectRatioLocked: true }), model.modelId).toEqual([])
+      }
       expect(() => assertProductionConfigurationVersion(contextFor(model), 'previous')).toThrow()
     }
   })

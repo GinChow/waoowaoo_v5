@@ -3,6 +3,8 @@
 import { GenerationReferenceLimits } from '../controls/GenerationReferenceLimits'
 import { GenerationFormIssues } from '../controls/GenerationFormIssues'
 import { canvasUsesAdaptiveFrame } from '../create/canvas-generation-form'
+import { CanvasDraftReferencePicker } from '../create/CanvasDraftReferencePicker'
+import { ReferenceChip } from '../create/ReferenceChip'
 
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
@@ -14,11 +16,17 @@ import type {
 import { workspaceCanvasScrollableRegionProps } from '../canvas-scroll-lock'
 import { AspectRatioPicker } from '../controls/AspectRatioPicker'
 import { GenerationParameterFields } from '../controls/GenerationParameterFields'
-import { resolveCanvasAspectRatioChoices, type CanvasGenerationCapability } from '../create/canvas-draft'
+import { resolveCanvasAspectRatioChoices, type CanvasDraftReferenceCandidate, type CanvasGenerationCapability } from '../create/canvas-draft'
 import { SELECTABLE_TEXT_CLASS } from '../nodes/renderers/renderer-shared'
 import type { useWorkspaceNodeGenerationEdits } from './useWorkspaceNodeGenerationEdits'
 
 type GenerationEditor = ReturnType<typeof useWorkspaceNodeGenerationEdits>
+
+/** A reference attached in this edit, with the candidate it was attached from (null once that is no longer known). */
+export interface WorkspaceNodeAddedReference {
+  readonly reference: WorkspaceResourceRegenerationReference
+  readonly candidate: CanvasDraftReferenceCandidate | null
+}
 
 const PROMPT_MAX_LENGTH = 100_000
 
@@ -127,6 +135,7 @@ export function WorkspaceNodeGenerationEditor({
   disabled,
   dropHighlighted,
   addedReferences,
+  referencePicker,
 }: {
   readonly template: WorkspaceResourceRegenerationTemplate
   readonly editor: GenerationEditor
@@ -136,7 +145,15 @@ export function WorkspaceNodeGenerationEditor({
   readonly disabled: boolean
   readonly dropHighlighted: boolean
   /** References attached in this edit that are not lineage inputs of the card. */
-  readonly addedReferences: readonly WorkspaceResourceRegenerationReference[]
+  readonly addedReferences: readonly WorkspaceNodeAddedReference[]
+  /** Upload / project-picker entry for attaching references beyond card drops. */
+  readonly referencePicker: {
+    readonly projectId: string
+    readonly folderPath: string | null
+    readonly onAdd: (candidate: CanvasDraftReferenceCandidate) => boolean
+    readonly onUploaded: (resourceId: string, reused: boolean) => void
+    readonly onBusyChange: (busy: boolean) => void
+  }
 }) {
   const t = useTranslations('projectWorkflow.canvas.workspace.details.editor')
   const labels = useTranslations('projectWorkflow.canvas.workspace.nodeFields')
@@ -230,9 +247,28 @@ export function WorkspaceNodeGenerationEditor({
         </details>
       ) : null}
       <GenerationReferenceLimits capability={capability} />
+      {capability ? (
+        <CanvasDraftReferencePicker
+          projectId={referencePicker.projectId}
+          folderPath={referencePicker.folderPath}
+          capability={capability}
+          references={editor.references}
+          onAdd={referencePicker.onAdd}
+          onUploaded={referencePicker.onUploaded}
+          onBusyChange={referencePicker.onBusyChange}
+        />
+      ) : null}
       {addedReferences.length > 0 ? (
-        <ul className="mt-2 flex flex-wrap gap-1.5">
-          {addedReferences.map((reference) => (
+        <ul className="mt-2 space-y-1.5">
+          {addedReferences.map(({ reference, candidate }) => candidate ? (
+            <ReferenceChip
+              key={`${reference.resourceId}:${String(reference.contentVersion)}:${reference.role}`}
+              reference={{ ...candidate, role: reference.role }}
+              roles={[]}
+              disabled={disabled}
+              onRemove={() => editor.removeReference(reference)}
+            />
+          ) : (
             <li
               key={`${reference.resourceId}:${String(reference.contentVersion)}:${reference.role}`}
               className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 text-[11px] text-[var(--glass-text-secondary)] ring-1 ring-slate-200"

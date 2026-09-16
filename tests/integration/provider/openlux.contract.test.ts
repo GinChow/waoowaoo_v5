@@ -3,7 +3,8 @@ import { generateText, streamText } from 'ai'
 import { tryResolveAiProviderAdapter } from '@/lib/ai-providers'
 import { normalizeAiOptions } from '@/lib/ai-exec/normalize'
 import { ensureAiCatalogsRegistered } from '@/lib/ai-exec/catalog-bootstrap'
-import { calcImage } from '@/lib/billing/cost'
+import { calcImage, calcVideo } from '@/lib/billing/cost'
+import { resolveAsyncTaskProviderByExternalId } from '@/lib/ai-providers'
 import { resolveBuiltinPricing } from '@/lib/ai-registry/pricing-resolution'
 import type { AiProviderLanguageModelContext } from '@/lib/ai-providers/runtime-types'
 import { startScenarioServer } from '../../helpers/fakes/scenario-server'
@@ -219,5 +220,123 @@ describe('OpenLux provider protocol', () => {
       messages: [{ role: 'user', content: [{ type: 'text', text: 'Describe' }, { type: 'image', image: `data:image/png;base64,${PNG}` }] }] })
     expect(result.text).toBe('A harbor')
     expect(JSON.parse(server.getRequests('POST', path)[0].bodyText).contents[0].parts[1]).toEqual({ inlineData: { mimeType: 'image/png', data: PNG } })
+  })
+
+  // Protocol oracle: test_api/src/openlux-seedance2.ts, live 2026-09-16 — Ark
+  // passthrough at /api/v3, numeric task id, pending -> running -> succeeded,
+  // audio track present even when generate_audio is false.
+  function videoOptions(modelId: string, options: Record<string, unknown>) {
+    const selection = { provider: 'openlux', modelId, modelKey: `openlux::${modelId}`, variantSubKind: 'official' as const }
+    const schema = adapter().video!.describe(selection).optionSchema
+    return normalizeAiOptions({ schema, options, context: 'openlux-video-test' })
+  }
+
+  async function video(modelId: string, options: Record<string, unknown>, imageUrl = '') {
+    return adapter().video!.execute({
+      userId: 'test-user',
+      providerConfig: { id: 'openlux', name: 'OpenLux', apiKey: 'test-key', baseUrl: `${server.baseUrl}/proxy/v1/` },
+      selection: { provider: 'openlux', modelId, modelKey: `openlux::${modelId}`, variantSubKind: 'official' },
+      imageUrl,
+      options: videoOptions(modelId, { prompt: 'A harbor at dusk', resolution: '720p', aspectRatio: '16:9', duration: 5, generateAudio: true, ...options }),
+    })
+  }
+
+  function pollVideo(externalId: string) {
+    return resolveAsyncTaskProviderByExternalId(externalId).poll({
+      parsed: resolveAsyncTaskProviderByExternalId(externalId).parseExternalId(externalId),
+      context: {
+        userId: 'test-user',
+        getProviderConfig: async () => ({ id: 'openlux', name: 'OpenLux', apiKey: 'test-key', baseUrl: `${server.baseUrl}/proxy/v1/` }),
+        getUserModels: async () => [],
+      },
+    })
+  }
+
+  it.each(['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'])(
+    'submits %s through the Ark passthrough and polls to the gateway video url', async (modelId) => {
+      server.defineScenario({ method: 'POST', path: '/proxy/api/v3/contents/generations/tasks', mode: 'success',
+        submitResponse: { status: 200, body: { id: '139513828' } } })
+      server.defineScenario({ method: 'GET', path: '/proxy/api/v3/contents/generations/tasks/139513828', mode: 'queued_then_success',
+        pollSequence: [
+          { status: 200, body: { id: '139513828', status: 'pending' } },
+          { status: 200, body: { id: '139513828', status: 'running' } },
+          { status: 200, body: { id: '139513828', status: 'succeeded', content: { video_url: 'https://tos.example/out.mp4' }, usage: { total_tokens: 123 } } },
+        ] })
+      const submitted = await video(modelId, {}, 'https://cdn.example.com/first.png')
+      expect(submitted).toMatchObject({ success: true, async: true, requestId: '139513828', externalId: 'OPENLUX:VIDEO:139513828' })
+      const [request] = server.getRequests('POST', '/proxy/api/v3/contents/generations/tasks')
+      expect(request.headers.authorization).toBe('Bearer test-key')
+      expect(JSON.parse(request.bodyText)).toEqual({
+        model: modelId,
+        content: [
+          { type: 'text', text: 'A harbor at dusk' },
+          { type: 'image_url', image_url: { url: 'https://cdn.example.com/first.png' }, role: 'first_frame' },
+        ],
+        resolution: '720p', ratio: '16:9', duration: 5, generate_audio: true, watermark: false,
+      })
+      expect(await pollVideo(submitted.externalId!)).toEqual({ status: 'pending' })
+      expect(await pollVideo(submitted.externalId!)).toEqual({ status: 'pending' })
+      expect(await pollVideo(submitted.externalId!)).toEqual({
+        status: 'completed', videoUrl: 'https://tos.example/out.mp4', resultUrl: 'https://tos.example/out.mp4', actualVideoTokens: 123,
+      })
+    },
+  )
+
+  it('maps reference roles in Ark order and keeps text first', async () => {
+    server.defineScenario({ method: 'POST', path: '/proxy/api/v3/contents/generations/tasks', mode: 'success',
+      submitResponse: { status: 200, body: { id: '7' } } })
+    await video('doubao-seedance-2-0-260128', {
+      referenceImages: ['https://cdn.example.com/a.png'], referenceAudios: ['https://cdn.example.com/a.mp3'], referenceVideos: ['https://cdn.example.com/a.mp4'],
+    })
+    expect(JSON.parse(server.getRequests('POST', '/proxy/api/v3/contents/generations/tasks')[0].bodyText).content).toEqual([
+      { type: 'text', text: 'A harbor at dusk' },
+      { type: 'image_url', image_url: { url: 'https://cdn.example.com/a.png' }, role: 'reference_image' },
+      { type: 'audio_url', audio_url: { url: 'https://cdn.example.com/a.mp3' }, role: 'reference_audio' },
+      { type: 'video_url', video_url: { url: 'https://cdn.example.com/a.mp4' }, role: 'reference_video' },
+    ])
+  })
+
+  it.each([
+    ['generateAudio false is not honoured by the gateway', { generateAudio: false }],
+    ['1080p has no cost tier on this route', { resolution: '1080p' }],
+    ['reference audio needs a visual reference', { referenceAudios: ['https://cdn.example.com/a.mp3'] }],
+    ['last frame conflicts with references', { lastFrameImageUrl: 'https://cdn.example.com/l.png', referenceImages: ['https://cdn.example.com/a.png'] }],
+  ])('rejects video options the model does not support (%s)', async (_label, options) => {
+    await expect(video('doubao-seedance-2-0-fast-260128', options as Record<string, unknown>)).rejects.toMatchObject({ name: 'AiOptionValidationError' })
+    expect(server.getRequests('POST', '/proxy/api/v3/contents/generations/tasks')).toHaveLength(0)
+  })
+
+  it('rejects a last frame without a first frame before submission', async () => {
+    await expect(video('doubao-seedance-2-0-260128', { lastFrameImageUrl: 'https://cdn.example.com/l.png' }))
+      .rejects.toMatchObject({ disposition: 'pre_accept_rejected', provider: 'openlux' })
+  })
+
+  it('surfaces a rejected video submission with the gateway status', async () => {
+    server.defineScenario({ method: 'POST', path: '/proxy/api/v3/contents/generations/tasks', mode: 'fatal_error',
+      submitResponse: { status: 400, body: { error: { code: 'InvalidParameter', message: 'duration out of range' } } } })
+    await expect(video('doubao-seedance-2-0-260128', {})).rejects.toMatchObject({
+      code: 'PROVIDER_SUBMISSION_REJECTED', disposition: 'rejected', provider: 'openlux', details: { httpStatus: 400 },
+    })
+  })
+
+  it.each(['failed', 'expired'])('reports a %s task as a provider failure record', async (status) => {
+    server.defineScenario({ method: 'GET', path: '/proxy/api/v3/contents/generations/tasks/9', mode: 'success',
+      submitResponse: { status: 200, body: { id: '9', status, error: { code: 'OutputVideoSensitiveContentDetected', message: 'sensitive content' } } } })
+    expect(await pollVideo('OPENLUX:VIDEO:9')).toMatchObject({
+      status: 'failed',
+      failure: {
+        native: { message: 'sensitive content', code: 'OutputVideoSensitiveContentDetected' },
+        interpretation: { code: 'GENERATION_FAILED', details: { providerStatus: status, providerCode: 'OutputVideoSensitiveContentDetected' } },
+        context: { provider: 'openlux', phase: 'poll' },
+      },
+    })
+  })
+
+  it('bills Seedance on OpenLux at the shared Seedance product rate', () => {
+    for (const [modelId, arkModelId] of [['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-260128'], ['doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-fast-260128']]) {
+      for (const resolution of ['480p', '720p']) {
+        expect(calcVideo(`openlux::${modelId}`, resolution, 1, { duration: 5 })).toBe(calcVideo(`ark::${arkModelId}`, resolution, 1, { duration: 5 }))
+      }
+    }
   })
 })

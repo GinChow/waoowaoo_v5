@@ -1,6 +1,8 @@
+import { ARK_BUILTIN_PRICING_CATALOG_ENTRIES } from '@/lib/ai-providers/ark/pricing'
 import { OPENROUTER_BUILTIN_PRICING_CATALOG_ENTRIES } from '@/lib/ai-providers/openrouter/models'
 import { usdToCredits } from '@/lib/ai-registry/pricing-currency'
 import { OPENLUX_ASPECT_RATIOS, OPENLUX_IMAGE_MODELS, OPENLUX_RESOLUTIONS, openLuxImageQualities } from './models'
+import { OPENLUX_VIDEO_MODELS } from './video-models'
 
 // Temporary OpenRouter parity authorized by the product owner, not OpenLux
 // provider costs. Base token rates checked at /api/v1/models on 2026-09-14;
@@ -53,6 +55,15 @@ function imagePrice(modelId: string) {
   ] }
 }
 
+// Temporary Ark parity authorized by the product owner (2026-09-16), not
+// OpenLux provider costs. Retail is the shared Seedance product rate the Ark
+// entry already carries; 1080p has no Ark cost tier and stays unavailable.
+function seedanceVideoPrice(modelId: string) {
+  const entry = ARK_BUILTIN_PRICING_CATALOG_ENTRIES.find((item) => item.apiType === 'video' && item.modelId === modelId)
+  if (!entry || !('retail' in entry)) throw new Error(`OPENLUX_REFERENCE_VIDEO_PRICE_MISSING:${modelId}`)
+  return { cost: entry.cost, retail: entry.retail }
+}
+
 export const OPENLUX_PRICING = [
   ...[...GEMINI_USD_PER_MILLION, ...GPT_USD_PER_MILLION].map(([modelId, input, output]) => ({
     provider: 'openlux', modelId, apiType: 'text' as const, cost: tokenPrice(input, output),
@@ -64,4 +75,5 @@ export const OPENLUX_PRICING = [
     provider: 'openlux', modelId, apiType: 'text' as const, cost: referencePrice(`openai/${modelId}`),
   })),
   ...OPENLUX_IMAGE_MODELS.map(([modelId]) => ({ provider: 'openlux', modelId, apiType: 'image' as const, cost: imagePrice(modelId) })),
+  ...OPENLUX_VIDEO_MODELS.map(([modelId]) => ({ provider: 'openlux', modelId, apiType: 'video' as const, ...seedanceVideoPrice(modelId) })),
 ]

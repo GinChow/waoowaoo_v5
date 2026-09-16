@@ -132,6 +132,7 @@
       "openrouter_step1": "进入 OpenRouter 平台，创建 API Key（必须选择带有图像功能的模型）",
       "yunwu_step1": "进入云雾 Yunwu 平台，在 API Tokens 中创建 API Key",
       "openlux_step1": "进入 OpenLux 平台创建 API Key，接口地址填写 https://api.openlux.ai/v1",
+      "metaso_step1": "进入秘塔 Metaso 平台创建 API Key，接口地址填写 https://metaso.cn/api/minimax",
       "fal_step1": "进入 FAL 平台，创建 API Key",
       "google_step1": "进入 Google AI Studio，创建 API Key"
     }

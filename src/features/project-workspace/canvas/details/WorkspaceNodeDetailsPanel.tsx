@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslations } from 'next-intl'
 import { AppIcon, type AppIconName } from '@/components/ui/icons'
 import { useClientErrorMessage } from '@/hooks/useClientErrorMessage'
@@ -24,9 +24,9 @@ import type {
   WorkspaceResourceCardView,
 } from '../contracts/workspace-canvas-interactions'
 import { WorkspaceNodeActionBar } from './WorkspaceNodeActionBar'
-import { WorkspaceNodeGenerationEditor, WorkspaceNodePromptReadout } from './WorkspaceNodeGenerationEditor'
+import { WorkspaceNodeGenerationEditor, WorkspaceNodePromptReadout, type WorkspaceNodeAddedReference } from './WorkspaceNodeGenerationEditor'
 import { useWorkspaceNodeGenerationEdits } from './useWorkspaceNodeGenerationEdits'
-import { regenerationReferenceForCandidate } from '../create/canvas-draft'
+import { regenerationReferenceForCandidate, type CanvasDraftReferenceCandidate } from '../create/canvas-draft'
 import { canvasGenerationCapabilityFor } from '../hooks/useCanvasCreateDraft'
 
 /** Media-family icon for tiles that have no visual thumbnail of their own. */
@@ -393,29 +393,38 @@ export function WorkspaceNodeDetailsPanel({
         applyWorkspaceResourceRegenerationEdits(regenerateOperation.input, editor.edits, editor.configurationVersion),
       )
     : null
-  // A card dropped on this panel joins the edit's references with the role
-  // this generation kind allows; the request is consumed exactly once.
+  // Cards dropped on this panel, uploads and project picks all join the edit's
+  // references with the role this generation kind allows.
   const { referenceDrop, onReferenceDropConsumed } = actions
   const { addReference: addEditReference, references: editReferences } = editor
-  useEffect(() => {
-    if (!referenceDrop) return
-    onReferenceDropConsumed(referenceDrop.requestId)
-    if (!regenerationTemplate) return
+  const attachCandidate = useCallback((candidate: CanvasDraftReferenceCandidate) => {
+    if (!regenerationTemplate) return false
     const reference = regenerationReferenceForCandidate(
       regenerationTemplate.mediaType,
-      referenceDrop.candidate,
+      candidate,
       editReferences,
       generationCapability,
     )
-    if (reference) addEditReference(reference)
+    if (!reference) return false
+    addEditReference(reference, candidate)
+    return true
+  }, [addEditReference, editReferences, generationCapability, regenerationTemplate])
+  useEffect(() => {
+    if (!referenceDrop) return
+    onReferenceDropConsumed(referenceDrop.requestId)
+    attachCandidate(referenceDrop.candidate)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- The drop is consumed once against the references at that moment.
-  }, [addEditReference, generationCapability, onReferenceDropConsumed, referenceDrop, regenerationTemplate])
-  const droppedReferences = regenerationTemplate
-    ? editor.references.filter((reference) => !inputs.some((input) => (
+  }, [onReferenceDropConsumed, referenceDrop])
+  // The picker reports the rejection itself when no role is left for the candidate.
+  const [referencesBusy, setReferencesBusy] = useState(false)
+  const addedReferences: readonly WorkspaceNodeAddedReference[] = regenerationTemplate
+    ? editor.references
+      .filter((reference) => !inputs.some((input) => (
         input.resourceId === reference.resourceId
         && input.contentVersion === reference.contentVersion
         && input.role === reference.role
       )))
+      .map((reference) => ({ reference, candidate: editor.attachedCandidateFor(reference) }))
     : []
   // Text/structured resources load their full content through the single
   // single-resource read route; tree summaries stay bounded (WR-13).
@@ -570,7 +579,14 @@ export function WorkspaceNodeDetailsPanel({
           modelName={modelName}
           disabled={actions.busy}
           dropHighlighted={actions.dropHighlighted}
-          addedReferences={droppedReferences}
+          addedReferences={addedReferences}
+          referencePicker={{
+            projectId,
+            folderPath: actions.folderPath,
+            onAdd: attachCandidate,
+            onUploaded: actions.onUploadedReference,
+            onBusyChange: setReferencesBusy,
+          }}
         />
       ) : prompt ? (
         <WorkspaceNodePromptReadout prompt={prompt} modelName={modelName} />
@@ -604,7 +620,7 @@ export function WorkspaceNodeDetailsPanel({
         onDownload={download}
         onPreview={actions.onPreview}
         onRegenerate={regenerate}
-        regenerateDisabled={!editor.valid || generationCapability === null}
+        regenerateDisabled={!editor.valid || generationCapability === null || referencesBusy}
         onAnimate={actions.onAnimate}
         onUseAsReference={actions.onUseAsReference}
         onOperation={actions.onOperation}

@@ -6,6 +6,8 @@ import { OPENLUX_DEFAULT_BASE_URL, resolveOpenLuxBaseUrl } from './config'
 import { executeOpenLuxImage } from './image'
 import { createOpenLuxLanguageModel, validateOpenLuxLanguageModelResult } from './language-model'
 import { isOpenLuxGptModel, resolveOpenLuxImageOptionSchema } from './models'
+import { executeOpenLuxVideoGeneration } from './video'
+import { resolveOpenLuxVideoOptionSchema } from './video-models'
 
 const failure = createAiProviderFailureAdapter('openlux')
 const testerDefaults = { providerKey: 'openlux', failure, displayName: 'OpenLux', defaultBaseUrl: OPENLUX_DEFAULT_BASE_URL,
@@ -20,6 +22,11 @@ export const openLuxAdapter: AiProviderAdapter = {
     describe: (selection) => describeMediaVariantBase({ modality: 'image', selection, executionMode: 'sync',
       optionSchema: resolveOpenLuxImageOptionSchema(selection.modelId) }),
     execute: executeOpenLuxImage,
+  },
+  video: {
+    describe: (selection) => describeMediaVariantBase({ modality: 'video', selection, executionMode: 'async',
+      optionSchema: resolveOpenLuxVideoOptionSchema(selection.modelId) }),
+    execute: executeOpenLuxVideoGeneration,
   },
   languageModel: { create: createOpenLuxLanguageModel, validateResult: validateOpenLuxLanguageModelResult },
   connectionTest: {

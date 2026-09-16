@@ -1,7 +1,7 @@
 'use client'
 
 import { canvasGenerationFormIssues, canvasEditableParameters } from '../create/canvas-generation-form'
-import { canvasReferenceIssue, type CanvasGenerationCapability } from '../create/canvas-draft'
+import { canvasReferenceIssue, type CanvasDraftReferenceCandidate, type CanvasGenerationCapability } from '../create/canvas-draft'
 
 import { useCallback, useMemo, useState } from 'react'
 import type { WorkspaceResourceInputSummary } from '@/lib/workspace-resource/contracts'
@@ -50,12 +50,20 @@ export function useWorkspaceNodeGenerationEdits(template: WorkspaceResourceRegen
     const key = referenceKey(reference)
     setReferences((current) => current.filter((candidate) => referenceKey(candidate) !== key))
   }, [])
-  const addReference = useCallback((reference: WorkspaceResourceRegenerationReference) => {
+  // What each attached reference was attached from (name, thumbnail): the
+  // regeneration reference only carries identity, the chip needs the rest.
+  const [attachedCandidates, setAttachedCandidates] = useState<ReadonlyMap<string, CanvasDraftReferenceCandidate>>(() => new Map())
+  const addReference = useCallback((reference: WorkspaceResourceRegenerationReference, candidate?: CanvasDraftReferenceCandidate) => {
     const key = referenceKey(reference)
     setReferences((current) => (
       current.some((candidate) => referenceKey(candidate) === key) || canvasReferenceIssue(capability, [...current, reference]) ? current : [...current, reference]
     ))
+    if (candidate) setAttachedCandidates((current) => new Map(current).set(key, candidate))
   }, [capability])
+  const attachedCandidateFor = useCallback(
+    (reference: WorkspaceResourceRegenerationReference) => attachedCandidates.get(referenceKey(reference)) ?? null,
+    [attachedCandidates],
+  )
   const hasReference = useCallback(
     (reference: WorkspaceResourceRegenerationReference) => references.some(
       (candidate) => referenceKey(candidate) === referenceKey(reference),
@@ -78,7 +86,7 @@ export function useWorkspaceNodeGenerationEdits(template: WorkspaceResourceRegen
     || JSON.stringify(edits.parameters) !== JSON.stringify(template.parameters)
     || !sameReferences(edits.references, template.references)
   )
-  const issues = canvasGenerationFormIssues(capability, { ...edits, configurationVersion })
+  const issues = canvasGenerationFormIssues(capability, { ...edits, configurationVersion, aspectRatioLocked: template?.aspectRatioLocked ?? false })
   const valid = template !== null && edits.name.length > 0 && edits.name !== template.name
     && edits.prompt.length > 0 && issues.length === 0
   const reviewConfiguration = () => {
@@ -108,5 +116,6 @@ export function useWorkspaceNodeGenerationEdits(template: WorkspaceResourceRegen
     hasReference,
     removeReference,
     addReference,
+    attachedCandidateFor,
   } as const
 }

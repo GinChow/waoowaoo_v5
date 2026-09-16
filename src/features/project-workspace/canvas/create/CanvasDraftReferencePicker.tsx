@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { useTranslations } from 'next-intl'
+import type { GenerationReferenceRole } from '@/lib/ai-registry/generation-reference-policy'
 import GlassModalShell from '@/components/ui/primitives/GlassModalShell'
 import { workspaceUploadMediaType } from '@/lib/workspace-resource/upload-client'
 import { useWorkspaceResources } from '@/lib/query/hooks/useWorkspaceResources'
@@ -10,18 +11,24 @@ import type { WorkspaceResourceView } from '@/lib/workspace-resource/contracts'
 import { CanvasUploadQueue } from '../upload/CanvasUploadQueue'
 import { useCanvasUploadQueue } from '../upload/useCanvasUploadQueue'
 import { projectWorkspaceResourceCard } from '../projection/workspace-node-resource-projection'
-import { canvasDraftReferenceCandidate, canvasDraftReferenceRoles, canvasReferenceRole, type CanvasDraftReference, type CanvasDraftReferenceCandidate, type CanvasGenerationCapability } from './canvas-draft'
+import { canvasDraftReferenceCandidate, canvasDraftReferenceRoles, type CanvasDraftReferenceCandidate, type CanvasGenerationCapability } from './canvas-draft'
+
+/** What the picker needs to know about an already-attached reference: its identity and the role it occupies. */
+export type CanvasReferencePickerEntry = GenerationReferenceRole & { readonly resourceId: string }
 
 function candidateFor(resource: WorkspaceResourceView): CanvasDraftReferenceCandidate | null {
   return resource.resourceKind === 'file' ? canvasDraftReferenceCandidate(projectWorkspaceResourceCard(resource)) : null
 }
 
-/** Uploads and picker selections both attach canonical project resources to the existing draft owner. */
+/**
+ * Uploads and picker selections both attach canonical project resources to
+ * the owner of the edit — a create draft or a "run again" edit of a card.
+ */
 export function CanvasDraftReferencePicker({ projectId, folderPath, capability, references, onAdd, onUploaded, onBusyChange }: {
   readonly projectId: string
   readonly folderPath: string | null
   readonly capability: CanvasGenerationCapability | null
-  readonly references: readonly CanvasDraftReference[]
+  readonly references: readonly CanvasReferencePickerEntry[]
   readonly onAdd: (candidate: CanvasDraftReferenceCandidate) => boolean
   readonly onBusyChange: (busy: boolean) => void
   readonly onUploaded: (resourceId: string, reused: boolean) => void
@@ -42,7 +49,7 @@ export function CanvasDraftReferencePicker({ projectId, folderPath, capability, 
   } })
   const busy = pendingId !== null || queue.items.some((item) => item.stage === 'uploading' || item.stage === 'materializing')
   useEffect(() => { onBusyChange(busy) }, [busy, onBusyChange])
-  const roles = references.map(canvasReferenceRole)
+  const roles: readonly GenerationReferenceRole[] = references
   const allowedTypes = capability ? (['image', 'video', 'audio'] as const).filter((type) => canvasDraftReferenceRoles(capability.mediaType, type, capability, roles).length > 0) : []
   const accept = allowedTypes.map((type) => `${type}/*`).join(',')
   const canAdd = (candidate: CanvasDraftReferenceCandidate) => Boolean(capability

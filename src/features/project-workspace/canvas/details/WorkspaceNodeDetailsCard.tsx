@@ -53,6 +53,10 @@ export interface WorkspaceNodeDetailsActions {
   readonly dropHighlighted: boolean
   readonly referenceDrop: WorkspaceNodeReferenceDropRequest | null
   readonly onReferenceDropConsumed: (requestId: string) => void
+  /** Folder a reference uploaded from the panel lands in (the Canvas' current folder). */
+  readonly folderPath: string | null
+  /** A reference uploaded from the panel materialized; the Canvas places its card beside the selected node. */
+  readonly onUploadedReference: (resourceId: string, reused: boolean) => void
   /** Configured model capabilities; null while loading or when unavailable. */
   readonly generationCapabilities: WorkspaceCanvasGenerationCapabilitiesView | null
 }
