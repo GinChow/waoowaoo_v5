@@ -16,7 +16,12 @@ import {
   composeModelKey as composeStrictModelKey,
   parseModelKeyStrict,
 } from '@/lib/ai-registry/selection'
-import { findBuiltinCapabilities, resolveGenerationOptionsForModel } from '@/lib/ai-registry/capabilities-catalog'
+import {
+  type CapabilitySelectionValidationIssue,
+  findBuiltinCapabilities,
+  resolveGenerationOptionsForModel,
+} from '@/lib/ai-registry/capabilities-catalog'
+import { AiOptionValidationError } from '@/lib/ai-exec/normalize'
 import { ensureAiCatalogsRegistered } from '@/lib/ai-exec/catalog-bootstrap'
 import { getDeploymentConfig, isPlatformProviderCredentialMode } from '@/lib/deployment/config'
 import { getDeploymentFeatures } from '@/lib/deployment/features'
@@ -189,9 +194,37 @@ export function resolveModelCapabilityGenerationOptions(input: {
   })
 
   if (resolved.issues.length > 0) {
-    const first = resolved.issues[0]
-    throw new Error(`${first.code}: ${first.field} ${first.message}`)
+    throw capabilityIssueToOptionValidationError(input.modelKey, resolved.issues[0])
   }
 
   return resolved.options
+}
+
+/**
+ * A capability issue is caller input (a missing or disallowed option), not a
+ * system fault. Surface it as the typed option-validation error so media
+ * preflight classifies it as INVALID_PARAMS with the offending option field
+ * instead of degrading a bare Error into INTERNAL_ERROR/SYSTEM/stop.
+ */
+function capabilityIssueToOptionValidationError(
+  modelKey: string,
+  issue: CapabilitySelectionValidationIssue,
+): AiOptionValidationError {
+  const fieldPrefix = `capabilities.${modelKey}.`
+  const field = issue.field.startsWith(fieldPrefix)
+    ? issue.field.slice(fieldPrefix.length)
+    : undefined
+  const failure = issue.code === 'CAPABILITY_REQUIRED'
+    ? 'required_option'
+    : issue.code === 'CAPABILITY_VALUE_NOT_ALLOWED'
+      ? 'invalid_option'
+      : issue.code === 'CAPABILITY_FIELD_INVALID'
+        ? 'unsupported_option'
+        : 'invalid_options'
+  return new AiOptionValidationError({
+    failure,
+    context: modelKey,
+    ...(field ? { field } : {}),
+    reason: `${issue.code}: ${issue.message}`,
+  })
 }
